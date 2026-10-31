@@ -123,30 +123,32 @@
   all apply unchanged)."
   [request env tool-name ^js arguments {:keys [index]}]
   (if-let [{:keys [method path path-params]} (get index tool-name)]
-    (let [args (or arguments #js {})
+    (let [args (or arguments {})
+          path-param-set (set path-params)
+          arg-val (fn [k] (get args (keyword k)))
           substituted (reduce (fn [p param]
                                 (string/replace p
-                                                (str ":" param)
-                                                (js/encodeURIComponent (str (or (aget args param) "")))))
+                                                (str "{" param "}")
+                                                (js/encodeURIComponent (str (or (arg-val param) "")))))
                               path
                               path-params)
-          path-param-set (set path-params)
-          query (->> (js/Object.keys args)
-                     (remove #(or (contains? path-param-set %) (= "body" %)))
+          query (->> (keys args)
+                     (remove #(or (contains? path-param-set (name %)) (= :body %)))
                      (map (fn [k]
-                            (str (js/encodeURIComponent k)
+                            (str (js/encodeURIComponent (name k))
                                  "="
-                                 (js/encodeURIComponent (str (aget args k))))))
+                                 (js/encodeURIComponent (str (arg-val (name k)))))))
                      (string/join "&"))
-          body (when (aget args "body")
-                 (js/JSON.stringify (aget args "body")))
+          body (when (and (contains? args :body)
+                          (not (contains? #{"GET" "HEAD"} method)))
+                 (js/JSON.stringify (clj->js (get args :body))))
           url (str (.-origin (platform/request-url request))
                    substituted
                    (when (seq query) (str "?" query)))
-          headers (doto (js-obj)
-                    (aset "authorization" (.get (.-headers request) "authorization"))
-                    (when body
-                      (aset "content-type" "application/json")))
+          authorization (.get (.-headers request) "authorization")
+          headers (cond-> (js/Headers.)
+                    (string? authorization) (.set "authorization" authorization)
+                    (string? body) (.set "content-type" "application/json"))
           new-request (platform/request url #js {:method method
                                                  :headers headers
                                                  :body body})]
@@ -224,7 +226,7 @@
                                           :headers #js {"content-type" "application/json"}})))
 
           :else
-          (mcp-response {:jsonrpc "2.0" :id nil :error {:code -32600 :message "invalid request"}} 400)))))
+          (mcp-response {:jsonrpc "2.0" :id nil :error {:code -32600 :message "invalid request"}} 400))))))
 
 (defn handle
   "Stateless MCP Streamable HTTP endpoint: POST /mcp with JSON-RPC 2.0.

@@ -1,5 +1,7 @@
 (ns logseq.db-sync.node-mcp-test
   (:require [cljs.test :refer [async deftest is testing]]
+            [clojure.string :as string]
+            [logseq.db-sync.node.dispatch :as node-dispatch]
             [logseq.db-sync.node.mcp :as mcp]
             [logseq.db-sync.worker.dispatch :as worker-dispatch]
             [logseq.db-sync.worker.routes.semantic :as semantic-routes]
@@ -139,3 +141,79 @@
                (p/catch (fn [error]
                           (is false (str error))
                           (done)))))))
+
+(deftest readonly-rejects-node-sync-writes-test
+  (async done
+    (let [request (js/Request. "http://localhost/sync/g1/snapshot/upload"
+                               #js {:method "POST"
+                                    :headers #js {"authorization" "Bearer tok"}
+                                    :body "{}"})]
+      (-> (p/let [resp (node-dispatch/handle-node-fetch {:request request
+                                                          :env readonly-env
+                                                          :registry (atom {})
+                                                          :deps nil})
+                  status (.-status resp)
+                  body (.json resp)]
+            (is (= 403 status))
+            (is (= "server is read-only" (aget body "error"))))
+          (p/then (fn [] (done)))
+          (p/catch (fn [error]
+                     (is false (str error))
+                     (done)))))))
+
+(deftest readonly-allows-node-sync-reads-test
+  (async done
+    (let [request (js/Request. "http://localhost/sync/g1/pull"
+                               #js {:method "GET"
+                                    :headers #js {"authorization" "Bearer tok"}})]
+      (-> (p/let [resp (node-dispatch/handle-node-fetch {:request request
+                                                          :env readonly-env
+                                                          :registry (atom {})
+                                                          :deps nil})]
+            (is (not= 403 (.-status resp))))
+          (p/then (fn [] (done)))
+          (p/catch (fn [error]
+                     (is false (str error))
+                     (done)))))))
+
+(deftest mcp-tools-call-forwards-arguments-test
+  (async done
+    (let [forwarded (atom nil)
+          request (js/Request. "http://localhost/mcp"
+                               #js {:method "POST"
+                                    :headers #js {"authorization" "Bearer tok"
+                                                  "content-type" "application/json"}
+                                    :body (js/JSON.stringify
+                                           #js {:jsonrpc "2.0" :id 9 :method "tools/call"
+                                                :params #js {:name "createPage"
+                                                             :arguments #js {"graph-id" "g1"
+                                                                             "body" #js {"title" "x"}}}})})]
+      (let [orig @worker-dispatch/handle-worker-fetch
+            restore! (fn [] (set! worker-dispatch/handle-worker-fetch orig))]
+        (set! worker-dispatch/handle-worker-fetch
+              (fn [req _env]
+                (reset! forwarded {:url (.-url req)
+                                   :method (.-method req)
+                                   :authorization (.get (.-headers req) "authorization")
+                                   :content-type (.get (.-headers req) "content-type")
+                                   :body (.text req)})
+                (js/Response. "{}" #js {:status 200})))
+        (-> (p/let [resp (mcp/handle request #js {"DB_SYNC_STATIC_TOKEN" "tok"})
+                    body (.json resp)
+                    body-text (:body @forwarded)
+                    _ (is (= 200 (.-status resp)))
+                    _ (is (false? (aget body "result" "isError")))
+                    f (assoc @forwarded :parsed (js/JSON.parse body-text))]
+              (is (= "POST" (:method f)))
+              (is (= "Bearer tok" (:authorization f)))
+              (is (= "application/json" (:content-type f)))
+              (is (string/includes? (:url f) "/api/v1/graphs/g1/pages"))
+              (is (= "x" (aget (:parsed f) "title"))))
+            (p/then (fn []
+                      (restore!)
+                      (done)))
+            (p/catch (fn [error]
+                       (restore!)
+                       (is false (str error))
+                       (done))))))))
+
