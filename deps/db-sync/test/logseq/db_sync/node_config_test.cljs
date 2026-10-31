@@ -55,3 +55,21 @@
       (is (= "filesystem" (:assets-driver cfg)))))
   (testing "unsupported assets driver throws"
     (is (throws? #(config/normalize-config {:assets-driver "s3"})))))
+
+(deftest normalize-config-static-auth-and-readonly-test
+  (testing "static token, user id and readonly flag are picked up from env"
+    (with-env {"DB_SYNC_STATIC_TOKEN" "tok"
+               "DB_SYNC_STATIC_USER_ID" "me"
+               "DB_SYNC_READONLY" "true"}
+      #(let [cfg (config/normalize-config {})]
+         (is (= "tok" (:static-token cfg)))
+         (is (= "me" (:static-user-id cfg)))
+         (is (true? (:readonly? cfg))))))
+  (testing "readonly flag is false when unset or falsy"
+    (with-env {"DB_SYNC_STATIC_TOKEN" nil
+               "DB_SYNC_STATIC_USER_ID" nil
+               "DB_SYNC_READONLY" "0"}
+      #(let [cfg (config/normalize-config {})]
+         (is (nil? (:static-token cfg)))
+         (is (nil? (:static-user-id cfg)))
+         (is (false? (:readonly? cfg)))))))

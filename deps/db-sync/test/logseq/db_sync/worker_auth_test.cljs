@@ -105,3 +105,58 @@
                (p/catch (fn [error]
                           (is false (str error))
                           (done)))))))
+
+(deftest auth-claims-static-token-test
+  (async done
+         (let [env #js {"DB_SYNC_STATIC_TOKEN" "static-secret"
+                        "DB_SYNC_STATIC_USER_ID" "macbook"}
+               request (js/Request. "http://localhost/graphs"
+                                    #js {:headers #js {"authorization" "Bearer static-secret"}})]
+           (-> (p/let [claims (auth/auth-claims request env)]
+                 (is (= "macbook" (aget claims "sub")))
+                 (is (= "logseq/read logseq/write" (aget claims "scope"))))
+               (p/then (fn [] (done)))
+               (p/catch (fn [error]
+                          (is false (str error))
+                          (done)))))))
+
+(deftest auth-claims-static-token-default-user-test
+  (async done
+         (let [env #js {"DB_SYNC_STATIC_TOKEN" "static-secret"}
+               request (js/Request. "http://localhost/graphs"
+                                    #js {:headers #js {"authorization" "Bearer static-secret"}})]
+           (-> (p/let [claims (auth/auth-claims request env)]
+                 (is (= "local-user" (aget claims "sub"))))
+               (p/then (fn [] (done)))
+               (p/catch (fn [error]
+                          (is false (str error))
+                          (done)))))))
+
+(deftest auth-claims-static-token-mismatch-falls-through-to-jwt-test
+  (async done
+         (let [env #js {"DB_SYNC_STATIC_TOKEN" "static-secret"}
+               request (js/Request. "http://localhost/graphs"
+                                    #js {:headers #js {"authorization" "Bearer other-token"}})]
+           (-> (p/with-redefs [authorization/verify-jwt
+                               (fn [_token _env]
+                                 (p/rejected (ex-info "invalid" {})))]
+                 (p/let [claims (auth/auth-claims request env)]
+                   (is (nil? claims))))
+               (p/then (fn [] (done)))
+               (p/catch (fn [error]
+                          (is false (str error))
+                          (done)))))))
+
+(deftest auth-claims-static-token-ignored-when-env-unset-test
+  (async done
+         (let [request (js/Request. "http://localhost/graphs"
+                                    #js {:headers #js {"authorization" "Bearer static-secret"}})]
+           (-> (p/with-redefs [authorization/verify-jwt
+                               (fn [_token _env]
+                                 (p/rejected (ex-info "invalid" {})))]
+                 (p/let [claims (auth/auth-claims request #js {})]
+                   (is (nil? claims))))
+               (p/then (fn [] (done)))
+               (p/catch (fn [error]
+                          (is false (str error))
+                          (done)))))))

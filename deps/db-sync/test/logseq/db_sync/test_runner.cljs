@@ -8,6 +8,7 @@
             [logseq.db-sync.node-adapter-test]
             [logseq.db-sync.node-assets-test]
             [logseq.db-sync.node-config-test]
+            [logseq.db-sync.node-mcp-test]
             [logseq.db-sync.node-server-test]
             [logseq.db-sync.normalize-test]
             [logseq.db-sync.storage-test]

@@ -2,6 +2,7 @@
   (:require [clojure.string :as string]
             [logseq.db-sync.common :as common]
             [logseq.db-sync.node.graph :as graph]
+            [logseq.db-sync.node.mcp :as mcp]
             [logseq.db-sync.node.routes :as node-routes]
             [logseq.db-sync.platform.core :as platform]
             [logseq.db-sync.worker.handler.assets :as assets-handler]
@@ -57,6 +58,9 @@
 
       (= method "OPTIONS")
       (common/options-response)
+
+      (= path "/mcp")
+      (mcp/handle request env)
 
       (string/starts-with? path "/sync/")
       (if-let [{:keys [graph-id tail]} (node-routes/parse-sync-path path)]

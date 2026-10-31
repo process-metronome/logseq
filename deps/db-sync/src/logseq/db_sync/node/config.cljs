@@ -20,11 +20,16 @@
      :asset-link-secret (env-value env "ASSET_LINK_SECRET")
      :cognito-issuer (env-value env "COGNITO_ISSUER")
      :cognito-client-id (env-value env "COGNITO_CLIENT_ID")
-     :cognito-jwks-url (env-value env "COGNITO_JWKS_URL")}))
+     :cognito-jwks-url (env-value env "COGNITO_JWKS_URL")
+     :static-token (env-value env "DB_SYNC_STATIC_TOKEN")
+     :static-user-id (env-value env "DB_SYNC_STATIC_USER_ID")
+     :readonly? (contains? #{"1" "true" "yes" "on"}
+                           (string/lower-case (or (env-value env "DB_SYNC_READONLY") "")))}))
 
 (def ^:private allowed-config-keys
   [:port :base-url :data-dir :storage-driver :assets-driver :log-level :asset-link-secret
-   :cognito-issuer :cognito-client-id :cognito-jwks-url])
+   :cognito-issuer :cognito-client-id :cognito-jwks-url
+   :static-token :static-user-id :readonly?])
 
 (defn normalize-config [overrides]
   (let [defaults {:port 8080

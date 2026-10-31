@@ -40,6 +40,12 @@
       (aset env "DB_SYNC_ALLOW_UNVERIFIED_JWT_CLAIMS" allow-unverified-jwt-claims))
     (when (seq admin-token)
       (aset env "DB_SYNC_ADMIN_TOKEN" admin-token))
+    (when (seq (:static-token cfg))
+      (aset env "DB_SYNC_STATIC_TOKEN" (:static-token cfg)))
+    (when (seq (:static-user-id cfg))
+      (aset env "DB_SYNC_STATIC_USER_ID" (:static-user-id cfg)))
+    (when (:readonly? cfg)
+      (aset env "DB_SYNC_READONLY" "1"))
     env))
 
 (defn- request-origin-opts

@@ -99,6 +99,19 @@
 (defn now-ms []
   (.now js/Date))
 
+(def ^:private truthy-flag-values
+  #{"1" "true" "yes" "on"})
+
+(defn env-flag-enabled?
+  "Truthy check for a flag stored on a JS object (env, ctx, process.env)."
+  [obj k]
+  (let [v (some-> obj (aget k))]
+    (cond
+      (true? v) true
+      (false? v) false
+      (string? v) (contains? truthy-flag-values (string/lower-case v))
+      :else false)))
+
 (defn upgrade-request? [request]
   (= "websocket"
      (string/lower-case (or (.get (.-headers request) "upgrade") ""))))
