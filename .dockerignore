@@ -1,0 +1,20 @@
+# Keep the build context small for deps/db-sync/docker builds.
+# The root web-app Dockerfile does not use the build context (it clones inside).
+.git
+**/node_modules
+**/.shadow-cljs
+**/dist
+android
+ios
+clj-e2e
+cli-e2e
+cli/dist
+static
+dist
+resources/icons
+resources/fonts
+.github
+fastlane
+scripts
+docs
+prompts

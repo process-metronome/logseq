@@ -26,12 +26,15 @@
   [{:keys [config index-db assets-bucket]} graph-id]
   (let [{:keys [sql]} (storage/open-graph-db (:data-dir config) graph-id)
         state (make-state)
-        env (env-object config index-db assets-bucket)]
-    #js {:state state
-         :env env
-         :sql sql
-         :conn nil
-         :schema-ready false}))
+        env (env-object config index-db assets-bucket)
+        ctx #js {:state state
+                 :env env
+                 :sql sql
+                 :conn nil
+                 :schema-ready false}]
+    (when (:readonly? config)
+      (aset ctx "DB_SYNC_READONLY" "1"))
+    ctx))
 
 (defn get-or-create-graph
   [registry deps graph-id]

@@ -38,27 +38,29 @@
 (def ^:private recoverable-auth-errors
   #{"invalid" "iss not found" "aud not found" "exp" "kid"})
 
-(def ^:private truthy-env-values
-  #{"1" "true" "yes" "on"})
-
 (defn- recoverable-auth-error?
   [error]
   (when error
     (let [message (or (ex-message error) (some-> error .-message))]
       (contains? recoverable-auth-errors message))))
 
-(defn- env-flag-enabled?
-  [env k]
-  (let [v (some-> env (aget k))]
-    (cond
-      (true? v) true
-      (false? v) false
-      (string? v) (contains? truthy-env-values (string/lower-case v))
-      :else false)))
-
 (defn- allow-unverified-jwt-claims?
   [env]
-  (env-flag-enabled? env "DB_SYNC_ALLOW_UNVERIFIED_JWT_CLAIMS"))
+  (common/env-flag-enabled? env "DB_SYNC_ALLOW_UNVERIFIED_JWT_CLAIMS"))
+
+(defn- static-token-claims
+  "Self-hosted local auth: when `DB_SYNC_STATIC_TOKEN` is set on the env, an
+  exact bearer-token match authenticates as `DB_SYNC_STATIC_USER_ID`
+  (default \"local-user\") with full read+write scope. Inert unless the env
+  var is set, so the hosted worker is unaffected."
+  [token env]
+  (let [expected (aget env "DB_SYNC_STATIC_TOKEN")]
+    (when (and (string? expected) (seq expected) (= expected token))
+      (let [user-id (let [v (aget env "DB_SYNC_STATIC_USER_ID")]
+                      (if (and (string? v) (seq v)) v "local-user"))]
+        #js {"sub" user-id
+             "scope" "logseq/read logseq/write"
+             "static-token" true}))))
 
 (defn- expired-token?
   [token]
@@ -71,19 +73,21 @@
 (defn auth-claims [request env]
   (let [token (token-from-request request)]
     (if (string? token)
-      (if (expired-token? token)
-        (p/resolved nil)
-        (-> (authorization/verify-jwt token env)
-            (p/catch (fn [error]
-                       (cond
-                         (recoverable-auth-error? error)
-                         nil
+      (if-let [static-claims (static-token-claims token env)]
+        (p/resolved static-claims)
+        (if (expired-token? token)
+          (p/resolved nil)
+          (-> (authorization/verify-jwt token env)
+              (p/catch (fn [error]
+                         (cond
+                           (recoverable-auth-error? error)
+                           nil
 
-                         (allow-unverified-jwt-claims? env)
-                         (unsafe-jwt-claims token)
+                           (allow-unverified-jwt-claims? env)
+                           (unsafe-jwt-claims token)
 
-                         :else
-                         (p/rejected error))))))
+                           :else
+                           (p/rejected error)))))))
       (p/resolved nil))))
 
 (defn personal-access-token?

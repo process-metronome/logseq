@@ -114,6 +114,9 @@
   (p/let [claims (auth/semantic-auth-claims request env)]
     (cond
       (nil? claims) (http/unauthorized)
+      (and (common/env-flag-enabled? env "DB_SYNC_READONLY")
+           (= "logseq/write" (:scope operation)))
+      (http/error-response "server is read-only" 403)
       (not (contains? (scopes claims) (:scope operation))) (http/error-response "insufficient scope" 403)
       (= :semantic/graphs-list (:handler operation))
       (handle-semantic-graphs-list env url claims operation)
@@ -251,6 +254,10 @@
                       (subs rest-path slash-idx))
                new-url (js/URL. (str (.-origin url) tail (.-search url)))]
            (cond
+             (and (common/env-flag-enabled? env "DB_SYNC_READONLY")
+                  (not (contains? #{"GET" "HEAD" "OPTIONS"} method)))
+             (http/error-response "server is read-only" 403)
+
              (not (seq graph-id))
              (http/bad-request "missing graph id")
 

@@ -1,5 +1,6 @@
 (ns logseq.db-sync.worker.handler.ws
-  (:require [logseq.db-sync.protocol :as protocol]
+  (:require [logseq.db-sync.common :as common]
+            [logseq.db-sync.protocol :as protocol]
             [logseq.db-sync.worker.auth :as auth]
             [logseq.db-sync.worker.handler.sync :as sync-handler]
             [logseq.db-sync.worker.http :as http]
@@ -40,21 +41,23 @@
         ;; (send! ws (snapshot-response self))
 
         "tx/batch"
-        (let [txs (:txs message)
-              user (presence/get-user self ws)
-              t-before (sync-handler/parse-int (:t-before message))]
-          (if (sequential? txs)
-            (ws/send! ws (sync-handler/handle-tx-batch!
-                          self
-                          ws
-                          txs
-                          t-before
-                          (cond-> {:graph-id (aget self "graph-id")}
-                            (:client-revision message)
-                            (assoc :client-revision (:client-revision message))
-                            (:username user)
-                            (assoc :username (:username user)))))
-            (ws/send! ws {:type "tx/reject" :reason "invalid tx"})))
+        (if (common/env-flag-enabled? self "DB_SYNC_READONLY")
+          (ws/send! ws {:type "tx/reject" :reason "server is read-only"})
+          (let [txs (:txs message)
+                user (presence/get-user self ws)
+                t-before (sync-handler/parse-int (:t-before message))]
+            (if (sequential? txs)
+              (ws/send! ws (sync-handler/handle-tx-batch!
+                            self
+                            ws
+                            txs
+                            t-before
+                            (cond-> {:graph-id (aget self "graph-id")}
+                              (:client-revision message)
+                              (assoc :client-revision (:client-revision message))
+                              (:username user)
+                              (assoc :username (:username user)))))
+              (ws/send! ws {:type "tx/reject" :reason "invalid tx"}))))
 
         (ws/send! ws {:type "error" :message "unknown type"})))))
 
