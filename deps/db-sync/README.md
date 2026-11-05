@@ -206,6 +206,9 @@ curl -X POST https://$SYNC_DOMAIN/mcp \
 
 ### Pointing a local vault at the server
 
+The `plugins/master-node/` Logseq plugin additionally pushes individual pages
+to a self-hosted node over `/api/v1` from inside the app (see its README).
+
 On the machine with the vault (e.g. macOS, DB graphs in `~/logseq/graphs`):
 
 ```bash

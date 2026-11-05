@@ -1,0 +1,17 @@
+{
+  "name": "logseq-master-node",
+  "version": "0.1.0",
+  "description": "Push pages from this vault to a self-hosted Logseq master (remote db-sync) node and check its status.",
+  "logseq": {
+    "name": "Master Node",
+    "mode": "light",
+    "id": "logseq-master-node"
+  },
+  "main": "index.html",
+  "effects": true,
+  "defaultSettings": {
+    "remoteUrl": "",
+    "token": "",
+    "graphName": ""
+  }
+}
